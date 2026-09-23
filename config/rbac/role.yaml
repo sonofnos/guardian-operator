@@ -1,0 +1,72 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: guardian-operator-manager-role
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  - statefulsets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - batch
+  resources:
+  - cronjobs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - batch
+  resources:
+  - jobs
+  verbs:
+  - delete
+  - get
+  - list
+  - watch
+- apiGroups:
+  - guardian.sonofnos.dev
+  resources:
+  - backupschedules
+  - s3bucketclaims
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - guardian.sonofnos.dev
+  resources:
+  - backupschedules/finalizers
+  - s3bucketclaims/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - guardian.sonofnos.dev
+  resources:
+  - backupschedules/status
+  - s3bucketclaims/status
+  verbs:
+  - get
+  - patch
+  - update

@@ -1,0 +1,8 @@
+apiVersion: guardian.sonofnos.dev/v1alpha1
+kind: S3BucketClaim
+metadata:
+  name: sample-bucket
+spec:
+  bucketName: guardian-demo-bucket
+  region: us-east-1
+  versioningEnabled: true

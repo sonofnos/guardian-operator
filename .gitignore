@@ -1,0 +1,23 @@
+# Binaries
+bin/
+*.exe
+*.test
+manager
+
+# Go build/test artifacts
+*.out
+coverage.out
+coverage.html
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+
+# Local env
+.env
+
+# kind kubeconfig dumped by e2e scripts
+/test/e2e/kubeconfig

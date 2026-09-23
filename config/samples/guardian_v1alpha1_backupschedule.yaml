@@ -1,0 +1,11 @@
+apiVersion: guardian.sonofnos.dev/v1alpha1
+kind: BackupSchedule
+metadata:
+  name: sample-nightly-backup
+spec:
+  targetRef:
+    kind: Deployment
+    name: sample-app
+  schedule: "*/2 * * * *"
+  retention: 3
+  destination: "s3://guardian-demo-bucket/backups/sample-app"

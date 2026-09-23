@@ -1,0 +1,30 @@
+---
+# Permissions required for leader election (see cmd/main.go and the README
+# "High availability" section). Scoped to the namespace the operator runs
+# in, not cluster-wide.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: guardian-operator-leader-election-role
+  namespace: guardian-operator-system
+rules:
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: guardian-operator-leader-election-rolebinding
+  namespace: guardian-operator-system
+subjects:
+  - kind: ServiceAccount
+    name: guardian-operator-controller-manager
+    namespace: guardian-operator-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: guardian-operator-leader-election-role

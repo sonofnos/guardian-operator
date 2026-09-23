@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  unit:
+    name: vet, build, unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+      - run: go vet ./...
+      - run: go build ./...
+      - run: go test ./... -count=1 -v
+
+  e2e:
+    name: kind + LocalStack end-to-end
+    runs-on: ubuntu-latest
+    needs: unit
+    services:
+      localstack:
+        image: localstack/localstack:3.8
+        ports:
+          - 4566:4566
+        env:
+          SERVICES: s3
+          DEFAULT_REGION: us-east-1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+
+      - name: Create kind cluster
+        uses: helm/kind-action@v1
+        with:
+          cluster_name: guardian-e2e
+          wait: 120s
+
+      - name: Build operator image
+        run: docker build -t guardian-operator:e2e .
+
+      - name: Load image into kind
+        run: kind load docker-image guardian-operator:e2e --name guardian-e2e
+
+      - name: Apply CRDs and RBAC
+        run: |
+          kubectl apply -f config/crd/bases/
+          kubectl apply -f config/rbac/service_account.yaml
+          kubectl apply -f config/rbac/role.yaml
+          kubectl apply -f config/rbac/role_binding.yaml
+          kubectl apply -f config/rbac/leader_election_role.yaml
+
+      - name: Deploy operator
+        run: |
+          kubectl apply -f config/manager/manager.yaml
+          kubectl -n guardian-operator-system set image deployment/guardian-operator-controller-manager manager=guardian-operator:e2e
+          # On GitHub-hosted runners the localstack service container is
+          # reachable from kind nodes via the host's docker0 bridge gateway,
+          # not by service name (that DNS entry only exists in the job
+          # container's network namespace). host.docker.internal is not
+          # available on Linux runners either, so we resolve the bridge
+          # gateway IP and point the operator at it directly.
+          GATEWAY_IP=$(docker network inspect kind -f '{{range .IPAM.Config}}{{.Gateway}}{{end}}')
+          kubectl -n guardian-operator-system set env deployment/guardian-operator-controller-manager \
+            AWS_ENDPOINT_URL="http://${GATEWAY_IP}:4566" \
+            AWS_ACCESS_KEY_ID=test \
+            AWS_SECRET_ACCESS_KEY=test \
+            AWS_REGION=us-east-1
+          kubectl -n guardian-operator-system rollout status deployment/guardian-operator-controller-manager --timeout=180s
+
+      - name: Apply sample resources and wait for Ready
+        run: |
+          kubectl apply -f config/samples/sample-app-deployment.yaml
+          kubectl apply -f config/samples/guardian_v1alpha1_backupschedule.yaml
+          kubectl apply -f config/samples/guardian_v1alpha1_s3bucketclaim.yaml
+
+          deadline=$((SECONDS + 180))
+          while [ "$SECONDS" -lt "$deadline" ]; do
+            bs=$(kubectl get backupschedule sample-nightly-backup -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || true)
+            s3=$(kubectl get s3bucketclaim sample-bucket -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || true)
+            echo "BackupSchedule Ready=$bs, S3BucketClaim Ready=$s3"
+            if [ "$bs" = "True" ] && [ "$s3" = "True" ]; then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "resources did not become Ready in time"
+          kubectl get backupschedule sample-nightly-backup -o yaml || true
+          kubectl get s3bucketclaim sample-bucket -o yaml || true
+          kubectl -n guardian-operator-system logs deployment/guardian-operator-controller-manager --all-containers --tail=300 || true
+          exit 1
