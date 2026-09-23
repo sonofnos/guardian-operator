@@ -2,7 +2,7 @@
 bin/
 *.exe
 *.test
-manager
+/manager
 
 # Go build/test artifacts
 *.out
